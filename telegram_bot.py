@@ -59,10 +59,17 @@ def _fetch_instagram_info(username: str) -> Optional[dict]:
         LOGGER.exception("Request to %s failed", url)
         return None
     if response.status_code != 200:
+        try:
+            error_detail = response.json()
+        except ValueError:
+            error_detail = response.text
         LOGGER.warning(
-            "Non-success status code %s for %s", response.status_code, url
+            "Non-success status code %s for %s: %s",
+            response.status_code,
+            url,
+            error_detail,
         )
-        return {"status_code": response.status_code}
+        return {"status_code": response.status_code, "error": error_detail}
     try:
         return response.json()
     except ValueError:
