@@ -203,43 +203,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return
     context.user_data["profile_pic_url"] = user.get("profile_pic_url")
-    is_private = (
-        messages.get_message("yes", lang)
-        if user.get("is_private")
-        else messages.get_message("no", lang)
-    )
-    text = messages.get_message(
-        "profile",
-        lang,
-        id=escape_markdown(str(user.get("id", "—")), version=2),
-        full_name=escape_markdown(user.get("full_name", ""), version=2),
-        bio=escape_markdown(user.get("biography", "") or "—", version=2),
-        followers=escape_markdown(
-            str(
-                user.get("follower_count")
-                or user.get("edge_followed_by", {}).get("count")
-                or 0
-            ),
-            version=2,
-        ),
-        following=escape_markdown(
-            str(
-                user.get("following_count")
-                or user.get("edge_follow", {}).get("count")
-                or 0
-            ),
-            version=2,
-        ),
-        media_count=escape_markdown(
-            str(
-                user.get("media_count")
-                or user.get("edge_owner_to_timeline_media", {}).get("count")
-                or 0
-            ),
-            version=2,
-        ),
-        is_private=escape_markdown(is_private, version=2),
-    )
+    text = messages.format_profile_info(user, lang)
     caption = text
     photo_url = user.get("profile_pic_url")
     if photo_url:
