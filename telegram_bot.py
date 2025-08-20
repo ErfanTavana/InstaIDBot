@@ -109,8 +109,24 @@ def _fetch_instagram_info_cache_clear() -> None:
 _fetch_instagram_info.cache_clear = _fetch_instagram_info_cache_clear
 
 
+async def send_welcome_message(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    """Send a friendly Persian welcome message explaining the bot."""
+    lang = _get_lang(context)
+    text = escape_markdown(
+        "👋 به InstaIDBot خوش آمدی! این ربات اطلاعات عمومی حساب‌های اینستاگرام را می‌گیرد و به صورت خلاصه برات می‌فرسته. کافی هست نام کاربری رو بفرستی 😊",
+        version=2,
+    )
+    await update.message.reply_text(
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+    )
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
+    if not context.user_data.get("started"):
+        await send_welcome_message(update, context)
+        context.user_data["started"] = True
+        return
     lang = _get_lang(context)
     text = escape_markdown(messages.get_message("start", lang), version=2)
     await update.message.reply_text(
