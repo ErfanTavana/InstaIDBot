@@ -3,7 +3,8 @@ import logging
 from typing import Optional
 
 import instaloader
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import ReplyKeyboardMarkup, Update
+from telegram.constants import ParseMode
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -11,6 +12,7 @@ from telegram.ext import (
     MessageHandler,
     filters,
 )
+from telegram.helpers import escape_markdown
 
 
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
@@ -27,18 +29,21 @@ LOGGER = logging.getLogger(__name__)
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     keyboard = ReplyKeyboardMarkup([["راهنما"]], resize_keyboard=True)
-    text = (
-        "سلام!\n"
-        "نام کاربری اینستاگرام را ارسال کنید تا اطلاعات عمومی آن نمایش داده شود."
+    text = escape_markdown(
+        "سلام!\nنام کاربری اینستاگرام را ارسال کنید تا اطلاعات عمومی آن نمایش داده شود.",
+        version=2,
     )
-    await update.message.reply_text(text, reply_markup=keyboard)
+    await update.message.reply_text(
+        text, reply_markup=keyboard, parse_mode=ParseMode.MARKDOWN_V2
+    )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = (
-        "برای دریافت اطلاعات، تنها کافی است نام کاربری اینستاگرام را بدون @ ارسال کنید."
+    text = escape_markdown(
+        "برای دریافت اطلاعات، تنها کافی است نام کاربری اینستاگرام را بدون @ ارسال کنید.",
+        version=2,
     )
-    await update.message.reply_text(text)
+    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
 
 
 def _fetch_instagram_info(username: str) -> Optional[dict]:
@@ -73,51 +78,78 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     username = update.message.text.strip().lstrip("@")
     data = _fetch_instagram_info(username)
     if data is None:
-        await update.message.reply_text(
-            "خطا در برقراری ارتباط با اینستاگرام. لطفاً دوباره تلاش کنید."
+        text = escape_markdown(
+            "خطا در برقراری ارتباط با اینستاگرام. لطفاً دوباره تلاش کنید.",
+            version=2,
         )
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
         return
     if data.get("error") == "not_found":
-        await update.message.reply_text("کاربر یافت نشد. نام کاربری را بررسی کنید.")
+        text = escape_markdown(
+            "کاربر یافت نشد. نام کاربری را بررسی کنید.",
+            version=2,
+        )
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
         return
     if data.get("error") == "private":
-        await update.message.reply_text(
-            "این پروفایل خصوصی است و نمی‌توان اطلاعات آن را نمایش داد."
+        text = escape_markdown(
+            "این پروفایل خصوصی است و نمی‌توان اطلاعات آن را نمایش داد.",
+            version=2,
         )
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
         return
     try:
         user = data["data"]["user"]
     except (KeyError, TypeError):
-        await update.message.reply_text(
-            "ساختار داده‌های دریافتی از اینستاگرام تغییر کرده است."
+        text = escape_markdown(
+            "ساختار داده‌های دریافتی از اینستاگرام تغییر کرده است.",
+            version=2,
         )
+        await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
         return
-    id_ = user.get("id", "نامشخص")
-    full_name = user.get("full_name", "")
-    biography = user.get("biography", "") or "—"
-    followers = (
-        user.get("follower_count")
-        or user.get("edge_followed_by", {}).get("count")
-        or 0
+    id_ = escape_markdown(str(user.get("id", "نامشخص")), version=2)
+    full_name_raw = user.get("full_name", "")
+    full_name = escape_markdown(full_name_raw, version=2)
+    biography_raw = (user.get("biography", "") or "—").replace("\n", " ")
+    biography = escape_markdown(biography_raw, version=2)
+    followers = escape_markdown(
+        str(
+            user.get("follower_count")
+            or user.get("edge_followed_by", {}).get("count")
+            or 0
+        ),
+        version=2,
     )
-    following = (
-        user.get("following_count")
-        or user.get("edge_follow", {}).get("count")
-        or 0
+    following = escape_markdown(
+        str(
+            user.get("following_count")
+            or user.get("edge_follow", {}).get("count")
+            or 0
+        ),
+        version=2,
     )
-    is_private = "بله" if user.get("is_private") else "خیر"
-    media_count = user.get("media_count") or user.get("edge_owner_to_timeline_media", {}).get("count")
+    is_private = escape_markdown(
+        "بله" if user.get("is_private") else "خیر", version=2
+    )
+    media_count = escape_markdown(
+        str(
+            user.get("media_count")
+            or user.get("edge_owner_to_timeline_media", {}).get("count")
+            or 0
+        ),
+        version=2,
+    )
 
     text = (
-        f"آیدی عددی: {id_}\n"
-        f"نام کامل: {full_name}\n"
-        f"بیوگرافی: {biography}\n"
-        f"فالوورها: {followers}\n"
-        f"دنبال‌شوندگان: {following}\n"
-        f"تعداد پست‌ها: {media_count}\n"
-        f"خصوصی: {is_private}"
+        f"**آید عددی:** `{id_}`\n"
+        f"**نام کامل:** `{full_name}`\n"
+        f"**بیوگرافی:** `{biography}`\n"
+        f"**فالوورها:** `{followers}`\n"
+        f"**دنبال‌شوندگان:** `{following}`\n"
+        f"**تعداد پست‌ها:** `{media_count}`\n"
+        f"**خصوصی:** `{is_private}`"
     )
-    await update.message.reply_text(text)
+    await update.message.reply_text(text, parse_mode=ParseMode.MARKDOWN_V2)
 
 
 def main() -> None:
