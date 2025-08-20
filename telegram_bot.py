@@ -7,8 +7,7 @@ import instaloader
 from telegram import (
     InlineKeyboardButton,
     InlineKeyboardMarkup,
-    InlineQueryResultArticle,
-    InputTextMessageContent,
+    InlineQueryResultPhoto,
     Update,
 )
 from telegram.constants import ParseMode
@@ -294,34 +293,17 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     if not query:
         await update.inline_query.answer([])
         return
-    lang = _get_lang(context)
     data = _fetch_instagram_info(query)
     results = []
     if data and not data.get("error"):
         user = data["data"]["user"]
-        is_private = (
-            messages.get_message("yes", lang)
-            if user.get("is_private")
-            else messages.get_message("no", lang)
-        )
-        text = messages.get_message(
-            "profile",
-            lang,
-            id=escape_markdown(str(user.get("id", "—")), version=2),
-            full_name=escape_markdown(user.get("full_name", ""), version=2),
-            bio=escape_markdown(user.get("biography", "") or "—", version=2),
-            followers=escape_markdown(str(user.get("follower_count") or 0), version=2),
-            following=escape_markdown(str(user.get("following_count") or 0), version=2),
-            media_count=escape_markdown(str(user.get("media_count") or 0), version=2),
-            is_private=escape_markdown(is_private, version=2),
-        )
+        caption = f"{user.get('full_name', '')} (@{user['username']})"
         results.append(
-            InlineQueryResultArticle(
+            InlineQueryResultPhoto(
                 id=user["username"],
-                title=user["username"],
-                input_message_content=InputTextMessageContent(
-                    text, parse_mode=ParseMode.MARKDOWN_V2
-                ),
+                photo_url=user["profile_pic_url"],
+                thumb_url=user["profile_pic_url"],
+                caption=caption,
             )
         )
     await update.inline_query.answer(results, cache_time=60)
