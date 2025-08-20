@@ -47,9 +47,24 @@ def _main_menu(lang: str) -> InlineKeyboardMarkup:
     keyboard = [
         [
             InlineKeyboardButton(
+                messages.get_message("btn_start", lang), callback_data="START"
+            )
+        ],
+        [
+            InlineKeyboardButton(
                 messages.get_message("btn_help", lang), callback_data="HELP"
             )
-        ]
+        ],
+        [
+            InlineKeyboardButton(
+                messages.get_message("btn_about", lang), callback_data="ABOUT"
+            )
+        ],
+        [
+            InlineKeyboardButton(
+                messages.get_message("btn_language", lang), callback_data="LANGUAGE"
+            )
+        ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -238,6 +253,17 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
 
 
+async def start_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
+    lang = _get_lang(context)
+    text = escape_markdown(messages.get_message("start", lang), version=2)
+    await query.message.reply_text(
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+    )
+
+
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
@@ -246,6 +272,40 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     text = escape_markdown(messages.get_message("help", lang), version=2)
     await query.message.reply_text(
         text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+    )
+
+
+async def about_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
+    lang = _get_lang(context)
+    text = escape_markdown(messages.get_message("about", lang), version=2)
+    await query.message.reply_text(
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+    )
+
+
+async def language_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
+    lang = _get_lang(context)
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                messages.get_message("btn_lang_fa", lang), callback_data="LANG_FA"
+            ),
+            InlineKeyboardButton(
+                messages.get_message("btn_lang_en", lang), callback_data="LANG_EN"
+            ),
+        ]
+    ]
+    text = escape_markdown(messages.get_message("language_prompt", lang), version=2)
+    await query.message.reply_text(
+        text,
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=InlineKeyboardMarkup(keyboard),
     )
 
 
@@ -294,7 +354,10 @@ def main() -> None:
     application.add_handler(CommandHandler("about", about_command))
     application.add_handler(CommandHandler("language", language_command))
     application.add_handler(MessageHandler(filters.Regex("^راهنما$"), help_command))
+    application.add_handler(CallbackQueryHandler(start_button, pattern="^START$"))
     application.add_handler(CallbackQueryHandler(help_button, pattern="^HELP$"))
+    application.add_handler(CallbackQueryHandler(about_button, pattern="^ABOUT$"))
+    application.add_handler(CallbackQueryHandler(language_menu, pattern="^LANGUAGE$"))
     application.add_handler(CallbackQueryHandler(language_button, pattern="^LANG_"))
     application.add_handler(
         InlineQueryHandler(inline_query)
