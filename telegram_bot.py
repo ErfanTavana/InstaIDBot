@@ -4,6 +4,7 @@ from typing import Optional
 
 import instaloader
 from telegram import Update, ReplyKeyboardMarkup
+from telegram.constants import ChatAction
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -70,6 +71,8 @@ def _fetch_instagram_info(username: str) -> Optional[dict]:
 
 
 async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    chat_id = update.effective_chat.id
+    await context.bot.send_chat_action(chat_id, action=ChatAction.TYPING)
     username = update.message.text.strip().lstrip("@")
     data = _fetch_instagram_info(username)
     if data is None:
@@ -117,6 +120,12 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         f"تعداد پست‌ها: {media_count}\n"
         f"خصوصی: {is_private}"
     )
+
+    profile_pic_url = user.get("profile_pic_url")
+    if profile_pic_url:
+        await context.bot.send_chat_action(chat_id, action=ChatAction.UPLOAD_PHOTO)
+        await context.bot.send_photo(chat_id, profile_pic_url)
+    await context.bot.send_chat_action(chat_id, action=ChatAction.TYPING)
     await update.message.reply_text(text)
 
 
