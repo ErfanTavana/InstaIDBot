@@ -25,6 +25,10 @@ class _Exceptions(SimpleNamespace):
     class PrivateProfileNotFollowedException(Exception):
         pass
 
+    class HTTPError(Exception):
+        def __init__(self, status_code):
+            self.status_code = status_code
+
 
 instaloader_stub = ModuleType("instaloader")
 instaloader_stub.Instaloader = _Instaloader
@@ -45,6 +49,7 @@ def _profile(**kwargs):
 
 
 def test_fetch_instagram_info_success(monkeypatch):
+    telegram_bot._fetch_instagram_info.cache_clear()
     profile = _profile(
         userid=123,
         username="user",
@@ -73,6 +78,8 @@ def test_fetch_instagram_info_success(monkeypatch):
 
 
 def test_fetch_instagram_info_not_found(monkeypatch):
+    telegram_bot._fetch_instagram_info.cache_clear()
+
     def fake_from_username(context, username):
         raise instaloader.exceptions.ProfileNotExistsException()
 
@@ -85,6 +92,8 @@ def test_fetch_instagram_info_not_found(monkeypatch):
 
 
 def test_fetch_instagram_info_private(monkeypatch):
+    telegram_bot._fetch_instagram_info.cache_clear()
+
     def fake_from_username(context, username):
         raise instaloader.exceptions.PrivateProfileNotFollowedException()
 
@@ -96,3 +105,38 @@ def test_fetch_instagram_info_private(monkeypatch):
     assert data == {"error": "private"}
 
 
+def test_fetch_instagram_info_http_errors(monkeypatch):
+    telegram_bot._fetch_instagram_info.cache_clear()
+
+    def fake_429(context, username):
+        raise instaloader.exceptions.HTTPError(429)
+
+    monkeypatch.setattr(
+        instaloader.Profile, "from_username", staticmethod(fake_429)
+    )
+    data = telegram_bot._fetch_instagram_info("rate")
+    assert data == {"error": "status_429"}
+
+    telegram_bot._fetch_instagram_info.cache_clear()
+
+    def fake_500(context, username):
+        raise instaloader.exceptions.HTTPError(500)
+
+    monkeypatch.setattr(
+        instaloader.Profile, "from_username", staticmethod(fake_500)
+    )
+    data = telegram_bot._fetch_instagram_info("server")
+    assert data == {"error": "status_500"}
+
+
+def test_fetch_instagram_info_network_error(monkeypatch):
+    telegram_bot._fetch_instagram_info.cache_clear()
+
+    def fake_exception(context, username):
+        raise Exception("network")
+
+    monkeypatch.setattr(
+        instaloader.Profile, "from_username", staticmethod(fake_exception)
+    )
+    data = telegram_bot._fetch_instagram_info("net")
+    assert data is None
