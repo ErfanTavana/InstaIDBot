@@ -12,7 +12,16 @@ from telegram.ext import (
     filters,
 )
 
-logging.basicConfig(level=logging.INFO)
+
+LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+logging.basicConfig(
+    level=logging.INFO,
+    format=LOG_FORMAT,
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("bot.log", encoding="utf-8"),
+    ],
+)
 LOGGER = logging.getLogger(__name__)
 
 
@@ -38,18 +47,33 @@ def _fetch_instagram_info(username: str) -> Optional[dict]:
         f"{username}"
     )
     headers = {"User-Agent": "Mozilla/5.0"}
+    LOGGER.debug("Instagram request: endpoint=%s payload=%s", url, {"username": username})
     try:
         response = requests.get(url, headers=headers, timeout=10)
-    except requests.RequestException as exc:  # type: ignore[name-defined]
-        LOGGER.error("Request failed: %s", exc)
+        LOGGER.debug(
+            "Instagram response: endpoint=%s status=%s",
+            url,
+            response.status_code,
+        )
+    except requests.RequestException:  # type: ignore[name-defined]
+        LOGGER.exception("Request to %s failed", url)
         return None
     if response.status_code != 200:
-        LOGGER.warning("Non-success status code %s", response.status_code)
-        return {"status_code": response.status_code}
+        try:
+            error_detail = response.json()
+        except ValueError:
+            error_detail = response.text
+        LOGGER.warning(
+            "Non-success status code %s for %s: %s",
+            response.status_code,
+            url,
+            error_detail,
+        )
+        return {"status_code": response.status_code, "error": error_detail}
     try:
         return response.json()
     except ValueError:
-        LOGGER.error("Invalid JSON response")
+        LOGGER.exception("Invalid JSON response from %s", url)
         return None
 
 
