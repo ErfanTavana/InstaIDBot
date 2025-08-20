@@ -3,9 +3,10 @@ import logging
 from typing import Optional
 
 import instaloader
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (
     ApplicationBuilder,
+    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     MessageHandler,
@@ -25,20 +26,30 @@ logging.basicConfig(
 LOGGER = logging.getLogger(__name__)
 
 
+def _main_menu() -> InlineKeyboardMarkup:
+    keyboard = [
+        [
+            InlineKeyboardButton("راهنما", callback_data="HELP"),
+            InlineKeyboardButton("عکس پروفایل", callback_data="PROFILE_PHOTO"),
+        ],
+        [InlineKeyboardButton("پست‌های اخیر", callback_data="RECENT_POSTS")],
+    ]
+    return InlineKeyboardMarkup(keyboard)
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    keyboard = ReplyKeyboardMarkup([["راهنما"]], resize_keyboard=True)
     text = (
         "سلام!\n"
         "نام کاربری اینستاگرام را ارسال کنید تا اطلاعات عمومی آن نمایش داده شود."
     )
-    await update.message.reply_text(text, reply_markup=keyboard)
+    await update.message.reply_text(text, reply_markup=_main_menu())
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
         "برای دریافت اطلاعات، تنها کافی است نام کاربری اینستاگرام را بدون @ ارسال کنید."
     )
-    await update.message.reply_text(text)
+    await update.message.reply_text(text, reply_markup=_main_menu())
 
 
 def _fetch_instagram_info(username: str) -> Optional[dict]:
@@ -74,22 +85,28 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     data = _fetch_instagram_info(username)
     if data is None:
         await update.message.reply_text(
-            "خطا در برقراری ارتباط با اینستاگرام. لطفاً دوباره تلاش کنید."
+            "خطا در برقراری ارتباط با اینستاگرام. لطفاً دوباره تلاش کنید.",
+            reply_markup=_main_menu(),
         )
         return
     if data.get("error") == "not_found":
-        await update.message.reply_text("کاربر یافت نشد. نام کاربری را بررسی کنید.")
+        await update.message.reply_text(
+            "کاربر یافت نشد. نام کاربری را بررسی کنید.",
+            reply_markup=_main_menu(),
+        )
         return
     if data.get("error") == "private":
         await update.message.reply_text(
-            "این پروفایل خصوصی است و نمی‌توان اطلاعات آن را نمایش داد."
+            "این پروفایل خصوصی است و نمی‌توان اطلاعات آن را نمایش داد.",
+            reply_markup=_main_menu(),
         )
         return
     try:
         user = data["data"]["user"]
     except (KeyError, TypeError):
         await update.message.reply_text(
-            "ساختار داده‌های دریافتی از اینستاگرام تغییر کرده است."
+            "ساختار داده‌های دریافتی از اینستاگرام تغییر کرده است.",
+            reply_markup=_main_menu(),
         )
         return
     id_ = user.get("id", "نامشخص")
@@ -117,7 +134,37 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         f"تعداد پست‌ها: {media_count}\n"
         f"خصوصی: {is_private}"
     )
-    await update.message.reply_text(text)
+    context.user_data["profile_pic_url"] = user.get("profile_pic_url")
+    await update.message.reply_text(text, reply_markup=_main_menu())
+
+
+async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    text = (
+        "برای دریافت اطلاعات، تنها کافی است نام کاربری اینستاگرام را بدون @ ارسال کنید."
+    )
+    await query.message.reply_text(text, reply_markup=_main_menu())
+
+
+async def profile_photo_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    url = context.user_data.get("profile_pic_url")
+    if url:
+        await query.message.reply_photo(url, reply_markup=_main_menu())
+    else:
+        await query.message.reply_text(
+            "ابتدا نام کاربری را ارسال کنید.", reply_markup=_main_menu()
+        )
+
+
+async def recent_posts_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    await query.message.reply_text(
+        "این قابلیت هنوز پیاده‌سازی نشده است.", reply_markup=_main_menu()
+    )
 
 
 def main() -> None:
@@ -130,6 +177,13 @@ def main() -> None:
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(MessageHandler(filters.Regex("^راهنما$"), help_command))
+    application.add_handler(CallbackQueryHandler(help_button, pattern="^HELP$"))
+    application.add_handler(
+        CallbackQueryHandler(profile_photo_button, pattern="^PROFILE_PHOTO$")
+    )
+    application.add_handler(
+        CallbackQueryHandler(recent_posts_button, pattern="^RECENT_POSTS$")
+    )
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_username)
     )
