@@ -101,6 +101,7 @@ def _fetch_instagram_info(username: str) -> Optional[dict]:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
     lang = _get_lang(context)
     text = escape_markdown(messages.get_message("start", lang), version=2)
     await update.message.reply_text(
@@ -109,6 +110,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
     lang = _get_lang(context)
     text = escape_markdown(messages.get_message("help", lang), version=2)
     await update.message.reply_text(
@@ -117,6 +119,7 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
     lang = _get_lang(context)
     text = escape_markdown(messages.get_message("about", lang), version=2)
     await update.message.reply_text(
@@ -125,6 +128,7 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
     lang = _get_lang(context)
     keyboard = [
         [
@@ -147,6 +151,7 @@ async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def language_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
     lang = "fa" if query.data == "LANG_FA" else "en"
     context.user_data["lang"] = lang
     text = escape_markdown(messages.get_message(f"language_set_{lang}", lang), version=2)
@@ -156,9 +161,9 @@ async def language_button(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 
 async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
     lang = _get_lang(context)
     username = update.message.text.strip().lstrip("@")
-    await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
     data = _fetch_instagram_info(username)
     if data is None:
         text = escape_markdown(messages.get_message("error_connection", lang), version=2)
@@ -247,6 +252,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
     lang = _get_lang(context)
     text = escape_markdown(messages.get_message("help", lang), version=2)
     await query.message.reply_text(
@@ -257,6 +263,7 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
 async def profile_photo_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
     lang = _get_lang(context)
     url = context.user_data.get("profile_pic_url")
     if url:
@@ -274,6 +281,7 @@ async def profile_photo_button(update: Update, context: ContextTypes.DEFAULT_TYP
 async def recent_posts_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
     lang = _get_lang(context)
     text = escape_markdown(messages.get_message("feature_pending", lang), version=2)
     await query.message.reply_text(
