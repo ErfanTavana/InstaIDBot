@@ -43,7 +43,7 @@ def _get_lang(context: ContextTypes.DEFAULT_TYPE) -> str:
     return context.user_data.get("lang", messages.DEFAULT_LANG)
 
 
-def _main_menu(lang: str) -> InlineKeyboardMarkup:
+def _main_menu(lang: str = messages.DEFAULT_LANG) -> InlineKeyboardMarkup:
     keyboard = [
         [
             InlineKeyboardButton(
@@ -353,7 +353,6 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("about", about_command))
     application.add_handler(CommandHandler("language", language_command))
-    application.add_handler(MessageHandler(filters.Regex("^راهنما$"), help_command))
     application.add_handler(CallbackQueryHandler(start_button, pattern="^START$"))
     application.add_handler(CallbackQueryHandler(help_button, pattern="^HELP$"))
     application.add_handler(CallbackQueryHandler(about_button, pattern="^ABOUT$"))
