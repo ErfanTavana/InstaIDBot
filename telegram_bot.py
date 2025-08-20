@@ -47,18 +47,8 @@ def _main_menu(lang: str) -> InlineKeyboardMarkup:
         [
             InlineKeyboardButton(
                 messages.get_message("btn_help", lang), callback_data="HELP"
-            ),
-            InlineKeyboardButton(
-                messages.get_message("btn_profile_photo", lang),
-                callback_data="PROFILE_PHOTO",
-            ),
-        ],
-        [
-            InlineKeyboardButton(
-                messages.get_message("btn_recent_posts", lang),
-                callback_data="RECENT_POSTS",
             )
-        ],
+        ]
     ]
     return InlineKeyboardMarkup(keyboard)
 
@@ -259,35 +249,6 @@ async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> Non
     )
 
 
-async def profile_photo_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
-    lang = _get_lang(context)
-    url = context.user_data.get("profile_pic_url")
-    if url:
-        await context.bot.send_chat_action(
-            query.message.chat_id, ChatAction.UPLOAD_PHOTO
-        )
-        await query.message.reply_photo(url, reply_markup=_main_menu(lang))
-    else:
-        text = escape_markdown(messages.get_message("photo_prompt", lang), version=2)
-        await query.message.reply_text(
-            text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
-        )
-
-
-async def recent_posts_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
-    lang = _get_lang(context)
-    text = escape_markdown(messages.get_message("feature_pending", lang), version=2)
-    await query.message.reply_text(
-        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
-    )
-
-
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.inline_query.query.strip().lstrip("@")
     if not query:
@@ -334,12 +295,6 @@ def main() -> None:
     application.add_handler(CommandHandler("language", language_command))
     application.add_handler(MessageHandler(filters.Regex("^راهنما$"), help_command))
     application.add_handler(CallbackQueryHandler(help_button, pattern="^HELP$"))
-    application.add_handler(
-        CallbackQueryHandler(profile_photo_button, pattern="^PROFILE_PHOTO$")
-    )
-    application.add_handler(
-        CallbackQueryHandler(recent_posts_button, pattern="^RECENT_POSTS$")
-    )
     application.add_handler(CallbackQueryHandler(language_button, pattern="^LANG_"))
     application.add_handler(
         InlineQueryHandler(inline_query)
