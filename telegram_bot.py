@@ -11,7 +11,8 @@ from telegram import (
     InputTextMessageContent,
     Update,
 )
-from telegram.constants import ChatAction, ParseMode
+from telegram.constants import ParseMode
+from telegram.constants import ChatAction
 from telegram.helpers import escape_markdown
 from telegram.ext import (
     ApplicationBuilder,
@@ -188,27 +189,44 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
         return
     context.user_data["profile_pic_url"] = user.get("profile_pic_url")
-    is_private = messages.get_message("yes", lang) if user.get("is_private") else messages.get_message("no", lang)
+    is_private = (
+        messages.get_message("yes", lang)
+        if user.get("is_private")
+        else messages.get_message("no", lang)
+    )
     text = messages.get_message(
         "profile",
         lang,
-        id=user.get("id", "—"),
-        full_name=user.get("full_name", ""),
-        bio=user.get("biography", "") or "—",
-        followers=
-            user.get("follower_count")
-            or user.get("edge_followed_by", {}).get("count")
-            or 0,
-        following=
-            user.get("following_count")
-            or user.get("edge_follow", {}).get("count")
-            or 0,
-        media_count=
-            user.get("media_count")
-            or user.get("edge_owner_to_timeline_media", {}).get("count"),
-        is_private=is_private,
+        id=escape_markdown(str(user.get("id", "—")), version=2),
+        full_name=escape_markdown(user.get("full_name", ""), version=2),
+        bio=escape_markdown(user.get("biography", "") or "—", version=2),
+        followers=escape_markdown(
+            str(
+                user.get("follower_count")
+                or user.get("edge_followed_by", {}).get("count")
+                or 0
+            ),
+            version=2,
+        ),
+        following=escape_markdown(
+            str(
+                user.get("following_count")
+                or user.get("edge_follow", {}).get("count")
+                or 0
+            ),
+            version=2,
+        ),
+        media_count=escape_markdown(
+            str(
+                user.get("media_count")
+                or user.get("edge_owner_to_timeline_media", {}).get("count")
+                or 0
+            ),
+            version=2,
+        ),
+        is_private=escape_markdown(is_private, version=2),
     )
-    caption = escape_markdown(text, version=2)
+    caption = text
     photo_url = user.get("profile_pic_url")
     if photo_url:
         await context.bot.send_chat_action(
@@ -273,19 +291,22 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     results = []
     if data and not data.get("error"):
         user = data["data"]["user"]
-        is_private = messages.get_message("yes", lang) if user.get("is_private") else messages.get_message("no", lang)
+        is_private = (
+            messages.get_message("yes", lang)
+            if user.get("is_private")
+            else messages.get_message("no", lang)
+        )
         text = messages.get_message(
             "profile",
             lang,
-            id=user.get("id", "—"),
-            full_name=user.get("full_name", ""),
-            bio=user.get("biography", "") or "—",
-            followers=user.get("follower_count") or 0,
-            following=user.get("following_count") or 0,
-            media_count=user.get("media_count"),
-            is_private=is_private,
+            id=escape_markdown(str(user.get("id", "—")), version=2),
+            full_name=escape_markdown(user.get("full_name", ""), version=2),
+            bio=escape_markdown(user.get("biography", "") or "—", version=2),
+            followers=escape_markdown(str(user.get("follower_count") or 0), version=2),
+            following=escape_markdown(str(user.get("following_count") or 0), version=2),
+            media_count=escape_markdown(str(user.get("media_count") or 0), version=2),
+            is_private=escape_markdown(is_private, version=2),
         )
-        text = escape_markdown(text, version=2)
         results.append(
             InlineQueryResultArticle(
                 id=user["username"],
