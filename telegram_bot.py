@@ -2,7 +2,7 @@ import os
 import logging
 from typing import Optional
 
-import requests
+import instaloader
 from telegram import Update, ReplyKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -42,39 +42,31 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
 
 
 def _fetch_instagram_info(username: str) -> Optional[dict]:
-    url = (
-        "https://i.instagram.com/api/v1/users/web_profile_info/?username="
-        f"{username}"
-    )
-    headers = {"User-Agent": "Mozilla/5.0"}
-    LOGGER.debug("Instagram request: endpoint=%s payload=%s", url, {"username": username})
+    L = instaloader.Instaloader()
+    LOGGER.debug("Fetching Instagram profile for %s", username)
     try:
-        response = requests.get(url, headers=headers, timeout=10)
-        LOGGER.debug(
-            "Instagram response: endpoint=%s status=%s",
-            url,
-            response.status_code,
-        )
-    except requests.RequestException:  # type: ignore[name-defined]
-        LOGGER.exception("Request to %s failed", url)
+        profile = instaloader.Profile.from_username(L.context, username)
+    except instaloader.exceptions.ProfileNotExistsException:
+        LOGGER.warning("Profile %s does not exist", username)
+        return {"error": "not_found"}
+    except instaloader.exceptions.PrivateProfileNotFollowedException:
+        LOGGER.warning("Profile %s is private", username)
+        return {"error": "private"}
+    except Exception:
+        LOGGER.exception("Failed to fetch profile %s", username)
         return None
-    if response.status_code != 200:
-        try:
-            error_detail = response.json()
-        except ValueError:
-            error_detail = response.text
-        LOGGER.warning(
-            "Non-success status code %s for %s: %s",
-            response.status_code,
-            url,
-            error_detail,
-        )
-        return {"status_code": response.status_code, "error": error_detail}
-    try:
-        return response.json()
-    except ValueError:
-        LOGGER.exception("Invalid JSON response from %s", url)
-        return None
+    user = {
+        "id": profile.userid,
+        "username": profile.username,
+        "full_name": profile.full_name,
+        "biography": profile.biography,
+        "follower_count": profile.followers,
+        "following_count": profile.followees,
+        "is_private": profile.is_private,
+        "media_count": profile.mediacount,
+        "profile_pic_url": profile.profile_pic_url,
+    }
+    return {"data": {"user": user}}
 
 
 async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -85,14 +77,13 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             "خطا در برقراری ارتباط با اینستاگرام. لطفاً دوباره تلاش کنید."
         )
         return
-    if "status_code" in data:
-        status = data["status_code"]
-        if status == 404:
-            await update.message.reply_text("کاربر یافت نشد. نام کاربری را بررسی کنید.")
-        else:
-            await update.message.reply_text(
-                "پاسخی از اینستاگرام دریافت نشد. لطفاً بعداً دوباره تلاش کنید."
-            )
+    if data.get("error") == "not_found":
+        await update.message.reply_text("کاربر یافت نشد. نام کاربری را بررسی کنید.")
+        return
+    if data.get("error") == "private":
+        await update.message.reply_text(
+            "این پروفایل خصوصی است و نمی‌توان اطلاعات آن را نمایش داد."
+        )
         return
     try:
         user = data["data"]["user"]
