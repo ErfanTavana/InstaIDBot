@@ -1,6 +1,7 @@
 import os
 import logging
-from functools import lru_cache
+import asyncio
+import time
 from typing import Optional
 
 import instaloader
@@ -53,8 +54,15 @@ def _main_menu(lang: str) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(keyboard)
 
 
-@lru_cache(maxsize=128)
+_CACHE_TTL = 300  # 5 minutes
+
+
 def _fetch_instagram_info(username: str) -> Optional[dict]:
+    """Fetch Instagram profile data with a short-lived cache."""
+    now = time.time()
+    cached = _fetch_instagram_info._cache.get(username)
+    if cached and now - cached[0] < _CACHE_TTL:
+        return cached[1]
     L = instaloader.Instaloader()
     LOGGER.debug("Fetching Instagram profile for %s", username)
     try:
@@ -86,7 +94,19 @@ def _fetch_instagram_info(username: str) -> Optional[dict]:
         "media_count": profile.mediacount,
         "profile_pic_url": profile.profile_pic_url,
     }
-    return {"data": {"user": user}}
+    data = {"data": {"user": user}}
+    _fetch_instagram_info._cache[username] = (now, data)
+    return data
+
+
+_fetch_instagram_info._cache = {}
+
+
+def _fetch_instagram_info_cache_clear() -> None:
+    _fetch_instagram_info._cache.clear()
+
+
+_fetch_instagram_info.cache_clear = _fetch_instagram_info_cache_clear
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -153,7 +173,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
     lang = _get_lang(context)
     username = update.message.text.strip().lstrip("@")
-    data = _fetch_instagram_info(username)
+    data = await asyncio.to_thread(_fetch_instagram_info, username)
     if data is None:
         text = escape_markdown(messages.get_message("error_connection", lang), version=2)
         await update.message.reply_text(
