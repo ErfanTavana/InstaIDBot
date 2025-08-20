@@ -1,24 +1,34 @@
 import os
 import logging
+from functools import lru_cache
 from typing import Optional
 
 import instaloader
-from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
-from telegram.constants import ParseMode
+from telegram import (
+    InlineKeyboardButton,
+    InlineKeyboardMarkup,
+    InlineQueryResultArticle,
+    InputTextMessageContent,
+    Update,
+)
+from telegram.constants import ChatAction, ParseMode
 from telegram.helpers import escape_markdown
 from telegram.ext import (
     ApplicationBuilder,
     CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
+    InlineQueryHandler,
     MessageHandler,
     filters,
 )
 
+import messages
 
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 LOG_FORMAT = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
     format=LOG_FORMAT,
     handlers=[
         logging.StreamHandler(),
@@ -28,41 +38,32 @@ logging.basicConfig(
 LOGGER = logging.getLogger(__name__)
 
 
-def _main_menu() -> InlineKeyboardMarkup:
+def _get_lang(context: ContextTypes.DEFAULT_TYPE) -> str:
+    return context.user_data.get("lang", messages.DEFAULT_LANG)
+
+
+def _main_menu(lang: str) -> InlineKeyboardMarkup:
     keyboard = [
         [
-            InlineKeyboardButton("راهنما", callback_data="HELP"),
-            InlineKeyboardButton("عکس پروفایل", callback_data="PROFILE_PHOTO"),
+            InlineKeyboardButton(
+                messages.get_message("btn_help", lang), callback_data="HELP"
+            ),
+            InlineKeyboardButton(
+                messages.get_message("btn_profile_photo", lang),
+                callback_data="PROFILE_PHOTO",
+            ),
         ],
-        [InlineKeyboardButton("پست‌های اخیر", callback_data="RECENT_POSTS")],
+        [
+            InlineKeyboardButton(
+                messages.get_message("btn_recent_posts", lang),
+                callback_data="RECENT_POSTS",
+            )
+        ],
     ]
     return InlineKeyboardMarkup(keyboard)
 
 
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = escape_markdown(
-        "سلام!\nنام کاربری اینستاگرام را ارسال کنید تا اطلاعات عمومی آن نمایش داده شود.",
-        version=2,
-    )
-    await update.message.reply_text(
-        text,
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=_main_menu(),
-    )
-
-
-async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = escape_markdown(
-        "برای دریافت اطلاعات، تنها کافی است نام کاربری اینستاگرام را بدون @ ارسال کنید.",
-        version=2,
-    )
-    await update.message.reply_text(
-        text,
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=_main_menu(),
-    )
-
-
+@lru_cache(maxsize=128)
 def _fetch_instagram_info(username: str) -> Optional[dict]:
     L = instaloader.Instaloader()
     LOGGER.debug("Fetching Instagram profile for %s", username)
@@ -74,8 +75,15 @@ def _fetch_instagram_info(username: str) -> Optional[dict]:
     except instaloader.exceptions.PrivateProfileNotFollowedException:
         LOGGER.warning("Profile %s is private", username)
         return {"error": "private"}
-    except Exception:
-        LOGGER.exception("Failed to fetch profile %s", username)
+    except Exception as err:  # pragma: no cover - network/HTTP errors
+        status = getattr(err, "status_code", None)
+        if status == 429:
+            LOGGER.warning("HTTP 429 for profile %s", username)
+            return {"error": "status_429"}
+        if status == 500:
+            LOGGER.warning("HTTP 500 for profile %s", username)
+            return {"error": "status_500"}
+        LOGGER.error("Failed to fetch profile %s", username, exc_info=err)
         return None
     user = {
         "id": profile.userid,
@@ -91,124 +99,213 @@ def _fetch_instagram_info(username: str) -> Optional[dict]:
     return {"data": {"user": user}}
 
 
-async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    username = update.message.text.strip().lstrip("@")
-    data = _fetch_instagram_info(username)
-    if data is None:
-        text = escape_markdown(
-            "خطا در برقراری ارتباط با اینستاگرام. لطفاً دوباره تلاش کنید.",
-            version=2,
-        )
-        await update.message.reply_text(
-            text,
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=_main_menu(),
-        )
-        return
-    if data.get("error") == "not_found":
-        text = escape_markdown(
-            "کاربر یافت نشد. نام کاربری را بررسی کنید.",
-            version=2,
-        )
-        await update.message.reply_text(
-            text,
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=_main_menu(),
-        )
-        return
-    if data.get("error") == "private":
-        text = escape_markdown(
-            "این پروفایل خصوصی است و نمی‌توان اطلاعات آن را نمایش داد.",
-            version=2,
-        )
-        await update.message.reply_text(
-            text,
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=_main_menu(),
-        )
-        return
-    try:
-        user = data["data"]["user"]
-    except (KeyError, TypeError):
-        text = escape_markdown(
-            "ساختار داده‌های دریافتی از اینستاگرام تغییر کرده است.",
-            version=2,
-        )
-        await update.message.reply_text(
-            text,
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=_main_menu(),
-        )
-        return
-    id_ = user.get("id", "نامشخص")
-    full_name = user.get("full_name", "")
-    biography = user.get("biography", "") or "—"
-    followers = (
-        user.get("follower_count")
-        or user.get("edge_followed_by", {}).get("count")
-        or 0
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    lang = _get_lang(context)
+    text = escape_markdown(messages.get_message("start", lang), version=2)
+    await update.message.reply_text(
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
     )
-    following = (
-        user.get("following_count")
-        or user.get("edge_follow", {}).get("count")
-        or 0
-    )
-    is_private = "بله" if user.get("is_private") else "خیر"
-    media_count = user.get("media_count") or user.get("edge_owner_to_timeline_media", {}).get("count")
 
-    text = (
-        f"آیدی عددی: {id_}\n"
-        f"نام کامل: {full_name}\n"
-        f"بیوگرافی: {biography}\n"
-        f"فالوورها: {followers}\n"
-        f"دنبال‌شوندگان: {following}\n"
-        f"تعداد پست‌ها: {media_count}\n"
-        f"خصوصی: {is_private}"
+
+async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    lang = _get_lang(context)
+    text = escape_markdown(messages.get_message("help", lang), version=2)
+    await update.message.reply_text(
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
     )
-    text = escape_markdown(text, version=2)
-    context.user_data["profile_pic_url"] = user.get("profile_pic_url")
+
+
+async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    lang = _get_lang(context)
+    text = escape_markdown(messages.get_message("about", lang), version=2)
+    await update.message.reply_text(
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+    )
+
+
+async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    lang = _get_lang(context)
+    keyboard = [
+        [
+            InlineKeyboardButton(
+                messages.get_message("btn_lang_fa", lang), callback_data="LANG_FA"
+            ),
+            InlineKeyboardButton(
+                messages.get_message("btn_lang_en", lang), callback_data="LANG_EN"
+            ),
+        ]
+    ]
+    text = escape_markdown(messages.get_message("language_prompt", lang), version=2)
     await update.message.reply_text(
         text,
         parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=_main_menu(),
+        reply_markup=InlineKeyboardMarkup(keyboard),
     )
+
+
+async def language_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.callback_query
+    await query.answer()
+    lang = "fa" if query.data == "LANG_FA" else "en"
+    context.user_data["lang"] = lang
+    text = escape_markdown(messages.get_message(f"language_set_{lang}", lang), version=2)
+    await query.message.reply_text(
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+    )
+
+
+async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    lang = _get_lang(context)
+    username = update.message.text.strip().lstrip("@")
+    await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
+    data = _fetch_instagram_info(username)
+    if data is None:
+        text = escape_markdown(messages.get_message("error_connection", lang), version=2)
+        await update.message.reply_text(
+            text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+        )
+        return
+    err = data.get("error")
+    if err:
+        key = {
+            "not_found": "error_not_found",
+            "private": "error_private",
+            "status_429": "error_429",
+            "status_500": "error_500",
+        }.get(err)
+        if key:
+            text = escape_markdown(messages.get_message(key, lang), version=2)
+            await update.message.reply_text(
+                text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+            )
+            return
+    try:
+        user = data["data"]["user"]
+    except (KeyError, TypeError):
+        text = escape_markdown(messages.get_message("error_data", lang), version=2)
+        await update.message.reply_text(
+            text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+        )
+        return
+    context.user_data["profile_pic_url"] = user.get("profile_pic_url")
+    is_private = messages.get_message("yes", lang) if user.get("is_private") else messages.get_message("no", lang)
+    text = messages.get_message(
+        "profile",
+        lang,
+        id=user.get("id", "—"),
+        full_name=user.get("full_name", ""),
+        bio=user.get("biography", "") or "—",
+        followers=
+            user.get("follower_count")
+            or user.get("edge_followed_by", {}).get("count")
+            or 0,
+        following=
+            user.get("following_count")
+            or user.get("edge_follow", {}).get("count")
+            or 0,
+        media_count=
+            user.get("media_count")
+            or user.get("edge_owner_to_timeline_media", {}).get("count"),
+        is_private=is_private,
+    )
+    caption = escape_markdown(text, version=2)
+    photo_url = user.get("profile_pic_url")
+    if photo_url:
+        await context.bot.send_chat_action(
+            update.effective_chat.id, ChatAction.UPLOAD_PHOTO
+        )
+        await update.message.reply_photo(
+            photo_url,
+            caption=caption,
+            parse_mode=ParseMode.MARKDOWN_V2,
+            reply_markup=_main_menu(lang),
+        )
+    else:
+        await update.message.reply_text(
+            caption, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+        )
 
 
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    text = escape_markdown(
-        "برای دریافت اطلاعات، تنها کافی است نام کاربری اینستاگرام را بدون @ ارسال کنید.",
-        version=2,
-    )
+    lang = _get_lang(context)
+    text = escape_markdown(messages.get_message("help", lang), version=2)
     await query.message.reply_text(
-        text,
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=_main_menu(),
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
     )
 
 
 async def profile_photo_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    lang = _get_lang(context)
     url = context.user_data.get("profile_pic_url")
     if url:
-        await query.message.reply_photo(url, reply_markup=_main_menu())
+        await context.bot.send_chat_action(
+            query.message.chat_id, ChatAction.UPLOAD_PHOTO
+        )
+        await query.message.reply_photo(url, reply_markup=_main_menu(lang))
     else:
-        text = escape_markdown("ابتدا نام کاربری را ارسال کنید.", version=2)
+        text = escape_markdown(messages.get_message("photo_prompt", lang), version=2)
         await query.message.reply_text(
-            text,
-            parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=_main_menu(),
+            text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
         )
 
 
 async def recent_posts_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    text = escape_markdown("این قابلیت هنوز پیاده‌سازی نشده است.", version=2)
+    lang = _get_lang(context)
+    text = escape_markdown(messages.get_message("feature_pending", lang), version=2)
     await query.message.reply_text(
-        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu()
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+    )
+
+
+async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    query = update.inline_query.query.strip().lstrip("@")
+    if not query:
+        await update.inline_query.answer([])
+        return
+    lang = _get_lang(context)
+    data = _fetch_instagram_info(query)
+    results = []
+    if data and not data.get("error"):
+        user = data["data"]["user"]
+        is_private = messages.get_message("yes", lang) if user.get("is_private") else messages.get_message("no", lang)
+        text = messages.get_message(
+            "profile",
+            lang,
+            id=user.get("id", "—"),
+            full_name=user.get("full_name", ""),
+            bio=user.get("biography", "") or "—",
+            followers=user.get("follower_count") or 0,
+            following=user.get("following_count") or 0,
+            media_count=user.get("media_count"),
+            is_private=is_private,
+        )
+        text = escape_markdown(text, version=2)
+        results.append(
+            InlineQueryResultArticle(
+                id=user["username"],
+                title=user["username"],
+                input_message_content=InputTextMessageContent(
+                    text, parse_mode=ParseMode.MARKDOWN_V2
+                ),
+            )
+        )
+    await update.inline_query.answer(results, cache_time=60)
+
+
+async def post_init(application):
+    await application.bot.set_my_commands(
+        [
+            ("start", "Start bot"),
+            ("help", "Help"),
+            ("about", "About"),
+            ("language", "Change language"),
+        ]
     )
 
 
@@ -218,9 +315,12 @@ def main() -> None:
         raise RuntimeError("متغیر محیطی TELEGRAM_BOT_TOKEN تنظیم نشده است.")
 
     application = ApplicationBuilder().token(token).build()
+    application.post_init = post_init
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
+    application.add_handler(CommandHandler("about", about_command))
+    application.add_handler(CommandHandler("language", language_command))
     application.add_handler(MessageHandler(filters.Regex("^راهنما$"), help_command))
     application.add_handler(CallbackQueryHandler(help_button, pattern="^HELP$"))
     application.add_handler(
@@ -228,6 +328,10 @@ def main() -> None:
     )
     application.add_handler(
         CallbackQueryHandler(recent_posts_button, pattern="^RECENT_POSTS$")
+    )
+    application.add_handler(CallbackQueryHandler(language_button, pattern="^LANG_"))
+    application.add_handler(
+        InlineQueryHandler(inline_query)
     )
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_username)
