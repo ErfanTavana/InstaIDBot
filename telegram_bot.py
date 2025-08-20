@@ -4,6 +4,8 @@ from typing import Optional
 
 import instaloader
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
+from telegram.constants import ParseMode
+from telegram.helpers import escape_markdown
 from telegram.ext import (
     ApplicationBuilder,
     CallbackQueryHandler,
@@ -38,18 +40,27 @@ def _main_menu() -> InlineKeyboardMarkup:
 
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = (
-        "سلام!\n"
-        "نام کاربری اینستاگرام را ارسال کنید تا اطلاعات عمومی آن نمایش داده شود."
+    text = escape_markdown(
+        "سلام!\nنام کاربری اینستاگرام را ارسال کنید تا اطلاعات عمومی آن نمایش داده شود.",
+        version=2,
     )
-    await update.message.reply_text(text, reply_markup=_main_menu())
+    await update.message.reply_text(
+        text,
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=_main_menu(),
+    )
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = (
-        "برای دریافت اطلاعات، تنها کافی است نام کاربری اینستاگرام را بدون @ ارسال کنید."
+    text = escape_markdown(
+        "برای دریافت اطلاعات، تنها کافی است نام کاربری اینستاگرام را بدون @ ارسال کنید.",
+        version=2,
     )
-    await update.message.reply_text(text, reply_markup=_main_menu())
+    await update.message.reply_text(
+        text,
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=_main_menu(),
+    )
 
 
 def _fetch_instagram_info(username: str) -> Optional[dict]:
@@ -84,28 +95,48 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     username = update.message.text.strip().lstrip("@")
     data = _fetch_instagram_info(username)
     if data is None:
-        await update.message.reply_text(
+        text = escape_markdown(
             "خطا در برقراری ارتباط با اینستاگرام. لطفاً دوباره تلاش کنید.",
+            version=2,
+        )
+        await update.message.reply_text(
+            text,
+            parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=_main_menu(),
         )
         return
     if data.get("error") == "not_found":
-        await update.message.reply_text(
+        text = escape_markdown(
             "کاربر یافت نشد. نام کاربری را بررسی کنید.",
+            version=2,
+        )
+        await update.message.reply_text(
+            text,
+            parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=_main_menu(),
         )
         return
     if data.get("error") == "private":
-        await update.message.reply_text(
+        text = escape_markdown(
             "این پروفایل خصوصی است و نمی‌توان اطلاعات آن را نمایش داد.",
+            version=2,
+        )
+        await update.message.reply_text(
+            text,
+            parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=_main_menu(),
         )
         return
     try:
         user = data["data"]["user"]
     except (KeyError, TypeError):
-        await update.message.reply_text(
+        text = escape_markdown(
             "ساختار داده‌های دریافتی از اینستاگرام تغییر کرده است.",
+            version=2,
+        )
+        await update.message.reply_text(
+            text,
+            parse_mode=ParseMode.MARKDOWN_V2,
             reply_markup=_main_menu(),
         )
         return
@@ -134,17 +165,27 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         f"تعداد پست‌ها: {media_count}\n"
         f"خصوصی: {is_private}"
     )
+    text = escape_markdown(text, version=2)
     context.user_data["profile_pic_url"] = user.get("profile_pic_url")
-    await update.message.reply_text(text, reply_markup=_main_menu())
+    await update.message.reply_text(
+        text,
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=_main_menu(),
+    )
 
 
 async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    text = (
-        "برای دریافت اطلاعات، تنها کافی است نام کاربری اینستاگرام را بدون @ ارسال کنید."
+    text = escape_markdown(
+        "برای دریافت اطلاعات، تنها کافی است نام کاربری اینستاگرام را بدون @ ارسال کنید.",
+        version=2,
     )
-    await query.message.reply_text(text, reply_markup=_main_menu())
+    await query.message.reply_text(
+        text,
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=_main_menu(),
+    )
 
 
 async def profile_photo_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -154,16 +195,20 @@ async def profile_photo_button(update: Update, context: ContextTypes.DEFAULT_TYP
     if url:
         await query.message.reply_photo(url, reply_markup=_main_menu())
     else:
+        text = escape_markdown("ابتدا نام کاربری را ارسال کنید.", version=2)
         await query.message.reply_text(
-            "ابتدا نام کاربری را ارسال کنید.", reply_markup=_main_menu()
+            text,
+            parse_mode=ParseMode.MARKDOWN_V2,
+            reply_markup=_main_menu(),
         )
 
 
 async def recent_posts_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
+    text = escape_markdown("این قابلیت هنوز پیاده‌سازی نشده است.", version=2)
     await query.message.reply_text(
-        "این قابلیت هنوز پیاده‌سازی نشده است.", reply_markup=_main_menu()
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu()
     )
 
 
