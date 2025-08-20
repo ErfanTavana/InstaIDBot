@@ -1,9 +1,10 @@
 import os
 import logging
+import asyncio
 from typing import Optional
 
 import instaloader
-from telegram import Update, ReplyKeyboardMarkup
+from telegram import Update, ReplyKeyboardMarkup, BotCommand
 from telegram.ext import (
     ApplicationBuilder,
     CommandHandler,
@@ -25,20 +26,49 @@ logging.basicConfig(
 LOGGER = logging.getLogger(__name__)
 
 
+def _get_language(update: Update) -> str:
+    return "fa" if update.effective_user and update.effective_user.language_code == "fa" else "en"
+
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    keyboard = ReplyKeyboardMarkup([["راهنما"]], resize_keyboard=True)
-    text = (
-        "سلام!\n"
-        "نام کاربری اینستاگرام را ارسال کنید تا اطلاعات عمومی آن نمایش داده شود."
-    )
-    await update.message.reply_text(text, reply_markup=keyboard)
+    lang = _get_language(update)
+    keyboard_label = "راهنما" if lang == "fa" else "Help"
+    keyboard = ReplyKeyboardMarkup([[keyboard_label]], resize_keyboard=True)
+    texts = {
+        "fa": (
+            "سلام!\n"
+            "نام کاربری اینستاگرام را ارسال کنید تا اطلاعات عمومی آن نمایش داده شود."
+        ),
+        "en": (
+            "Hello!\n"
+            "Send an Instagram username to receive its public information."
+        ),
+    }
+    await update.message.reply_text(texts[lang], reply_markup=keyboard)
 
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    text = (
-        "برای دریافت اطلاعات، تنها کافی است نام کاربری اینستاگرام را بدون @ ارسال کنید."
-    )
-    await update.message.reply_text(text)
+    lang = _get_language(update)
+    texts = {
+        "fa": "برای دریافت اطلاعات، تنها کافی است نام کاربری اینستاگرام را بدون @ ارسال کنید.",
+        "en": "To get information, simply send the Instagram username without @.",
+    }
+    await update.message.reply_text(texts[lang])
+
+
+async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    lang = _get_language(update)
+    texts = {
+        "fa": (
+            "این ربات اطلاعات عمومی حساب‌های اینستاگرام را نمایش می‌دهد و "
+            "هیچ ارتباطی با اینستاگرام ندارد."
+        ),
+        "en": (
+            "This bot displays public information about Instagram accounts and is "
+            "not affiliated with Instagram."
+        ),
+    }
+    await update.message.reply_text(texts[lang])
 
 
 def _fetch_instagram_info(username: str) -> Optional[dict]:
@@ -120,7 +150,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await update.message.reply_text(text)
 
 
-def main() -> None:
+async def main() -> None:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
         raise RuntimeError("متغیر محیطی TELEGRAM_BOT_TOKEN تنظیم نشده است.")
@@ -129,13 +159,29 @@ def main() -> None:
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(MessageHandler(filters.Regex("^راهنما$"), help_command))
+    application.add_handler(CommandHandler("about", about_command))
+    application.add_handler(MessageHandler(filters.Regex("^(راهنما|help)$"), help_command))
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_username)
     )
 
-    application.run_polling()
+    commands = {
+        "fa": [
+            BotCommand("start", "شروع ربات"),
+            BotCommand("help", "راهنما"),
+            BotCommand("about", "درباره ربات"),
+        ],
+        "en": [
+            BotCommand("start", "Start the bot"),
+            BotCommand("help", "Show help"),
+            BotCommand("about", "About this bot"),
+        ],
+    }
+    for lang, cmds in commands.items():
+        await application.bot.set_my_commands(cmds, language_code=lang)
+
+    await application.run_polling()
 
 
 if __name__ == "__main__":
-    main()
+    asyncio.run(main())
