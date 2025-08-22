@@ -3,20 +3,20 @@ import logging
 import asyncio
 import time
 from typing import Optional
+import re
 
 import instaloader
 from telegram import (
-    InlineKeyboardButton,
-    InlineKeyboardMarkup,
     InlineQueryResultPhoto,
     Update,
+    KeyboardButton,
+    ReplyKeyboardMarkup,
 )
 from telegram.constants import ParseMode
 from telegram.constants import ChatAction
 from telegram.helpers import escape_markdown
 from telegram.ext import (
     ApplicationBuilder,
-    CallbackQueryHandler,
     CommandHandler,
     ContextTypes,
     InlineQueryHandler,
@@ -43,30 +43,23 @@ def _get_lang(context: ContextTypes.DEFAULT_TYPE) -> str:
     return context.user_data.get("lang", messages.DEFAULT_LANG)
 
 
-def _main_menu(lang: str = messages.DEFAULT_LANG) -> InlineKeyboardMarkup:
+_ALL_LANGS = list(messages._translations.keys())
+
+
+def _button_regex(key: str) -> str:
+    texts = [messages.get_message(key, lang) for lang in _ALL_LANGS]
+    pattern = "^(" + "|".join(re.escape(t) for t in texts) + ")$"
+    return pattern
+
+
+def _main_menu(lang: str = messages.DEFAULT_LANG) -> ReplyKeyboardMarkup:
     keyboard = [
-        [
-            InlineKeyboardButton(
-                messages.get_message("btn_start", lang), callback_data="START"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                messages.get_message("btn_help", lang), callback_data="HELP"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                messages.get_message("btn_about", lang), callback_data="ABOUT"
-            )
-        ],
-        [
-            InlineKeyboardButton(
-                messages.get_message("btn_language", lang), callback_data="LANGUAGE"
-            )
-        ],
+        [KeyboardButton(messages.get_message("btn_start", lang))],
+        [KeyboardButton(messages.get_message("btn_help", lang))],
+        [KeyboardButton(messages.get_message("btn_about", lang))],
+        [KeyboardButton(messages.get_message("btn_language", lang))],
     ]
-    return InlineKeyboardMarkup(keyboard)
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
 _CACHE_TTL = 300  # 5 minutes
@@ -172,32 +165,35 @@ async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     lang = _get_lang(context)
     keyboard = [
         [
-            InlineKeyboardButton(
-                messages.get_message("btn_lang_fa", lang), callback_data="LANG_FA"
-            ),
-            InlineKeyboardButton(
-                messages.get_message("btn_lang_en", lang), callback_data="LANG_EN"
-            ),
+            KeyboardButton(messages.get_message("btn_lang_fa", lang)),
+            KeyboardButton(messages.get_message("btn_lang_en", lang)),
         ]
     ]
     text = escape_markdown(messages.get_message("language_prompt", lang), version=2)
     await update.message.reply_text(
         text,
         parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=InlineKeyboardMarkup(keyboard),
+        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
     )
 
 
-async def language_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
-    lang = "fa" if query.data == "LANG_FA" else "en"
+async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, lang: str) -> None:
+    await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
     context.user_data["lang"] = lang
-    text = escape_markdown(messages.get_message(f"language_set_{lang}", lang), version=2)
-    await query.message.reply_text(
+    text = escape_markdown(
+        messages.get_message(f"language_set_{lang}", lang), version=2
+    )
+    await update.message.reply_text(
         text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
     )
+
+
+async def set_language_fa(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await set_language(update, context, "fa")
+
+
+async def set_language_en(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await set_language(update, context, "en")
 
 
 async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -253,62 +249,6 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         )
 
 
-async def start_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
-    lang = _get_lang(context)
-    text = escape_markdown(messages.get_message("start", lang), version=2)
-    await query.message.reply_text(
-        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
-    )
-
-
-async def help_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
-    lang = _get_lang(context)
-    text = escape_markdown(messages.get_message("help", lang), version=2)
-    await query.message.reply_text(
-        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
-    )
-
-
-async def about_button(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
-    lang = _get_lang(context)
-    text = escape_markdown(messages.get_message("about", lang), version=2)
-    await query.message.reply_text(
-        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
-    )
-
-
-async def language_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
-    await context.bot.send_chat_action(query.message.chat_id, ChatAction.TYPING)
-    lang = _get_lang(context)
-    keyboard = [
-        [
-            InlineKeyboardButton(
-                messages.get_message("btn_lang_fa", lang), callback_data="LANG_FA"
-            ),
-            InlineKeyboardButton(
-                messages.get_message("btn_lang_en", lang), callback_data="LANG_EN"
-            ),
-        ]
-    ]
-    text = escape_markdown(messages.get_message("language_prompt", lang), version=2)
-    await query.message.reply_text(
-        text,
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=InlineKeyboardMarkup(keyboard),
-    )
-
-
 async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.inline_query.query.strip().lstrip("@")
     if not query:
@@ -353,11 +293,24 @@ def main() -> None:
     application.add_handler(CommandHandler("help", help_command))
     application.add_handler(CommandHandler("about", about_command))
     application.add_handler(CommandHandler("language", language_command))
-    application.add_handler(CallbackQueryHandler(start_button, pattern="^START$"))
-    application.add_handler(CallbackQueryHandler(help_button, pattern="^HELP$"))
-    application.add_handler(CallbackQueryHandler(about_button, pattern="^ABOUT$"))
-    application.add_handler(CallbackQueryHandler(language_menu, pattern="^LANGUAGE$"))
-    application.add_handler(CallbackQueryHandler(language_button, pattern="^LANG_"))
+    application.add_handler(
+        MessageHandler(filters.TEXT & filters.Regex(_button_regex("btn_start")), start)
+    )
+    application.add_handler(
+        MessageHandler(filters.TEXT & filters.Regex(_button_regex("btn_help")), help_command)
+    )
+    application.add_handler(
+        MessageHandler(filters.TEXT & filters.Regex(_button_regex("btn_about")), about_command)
+    )
+    application.add_handler(
+        MessageHandler(filters.TEXT & filters.Regex(_button_regex("btn_language")), language_command)
+    )
+    application.add_handler(
+        MessageHandler(filters.TEXT & filters.Regex(_button_regex("btn_lang_fa")), set_language_fa)
+    )
+    application.add_handler(
+        MessageHandler(filters.TEXT & filters.Regex(_button_regex("btn_lang_en")), set_language_en)
+    )
     application.add_handler(
         InlineQueryHandler(inline_query)
     )
