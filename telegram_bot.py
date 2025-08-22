@@ -307,7 +307,7 @@ async def main() -> None:
     await application.start()
     await application.bot.set_my_commands([("start", "شروع ربات")])
     await application.updater.start_polling()
-    await application.updater.wait_closed()
+    await application.wait_until_closed()
 
 
 if __name__ == "__main__":
