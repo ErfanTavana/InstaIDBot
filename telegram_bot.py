@@ -11,6 +11,7 @@ from telegram import (
     Update,
     KeyboardButton,
     ReplyKeyboardMarkup,
+    BotCommand,
 )
 from telegram.constants import ParseMode
 from telegram.constants import ChatAction
@@ -270,12 +271,22 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.inline_query.answer(results, cache_time=60)
 
 
-async def main() -> None:
+# ---- PTB v20+: set commands via post_init (async) ----
+async def _post_init(application):
+    await application.bot.set_my_commands([BotCommand("start", "شروع ربات")])
+
+
+def main() -> None:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
         raise RuntimeError("متغیر محیطی TELEGRAM_BOT_TOKEN تنظیم نشده است.")
 
-    application = ApplicationBuilder().token(token).build()
+    application = (
+        ApplicationBuilder()
+        .token(token)
+        .post_init(_post_init)
+        .build()
+    )
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(
@@ -296,20 +307,14 @@ async def main() -> None:
     application.add_handler(
         MessageHandler(filters.TEXT & filters.Regex(_button_regex("btn_lang_en")), set_language_en)
     )
-    application.add_handler(
-        InlineQueryHandler(inline_query)
-    )
+    application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_username)
     )
 
-    await application.initialize()
-    await application.start()
-    await application.bot.set_my_commands([("start", "شروع ربات")])
-    await application.updater.start_polling()
-    await application.updater.wait_until_closed()
+    # run_polling سنکرون و بلاکینگ است و خودش event loop را مدیریت می‌کند.
+    application.run_polling(allowed_updates=Update.ALL_TYPES)
 
 
 if __name__ == "__main__":
-    import asyncio
-    asyncio.run(main())
+    main()
