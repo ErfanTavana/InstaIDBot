@@ -270,15 +270,13 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.inline_query.answer(results, cache_time=60)
 
 
-def main() -> None:
+async def main() -> None:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
         raise RuntimeError("متغیر محیطی TELEGRAM_BOT_TOKEN تنظیم نشده است.")
 
     application = ApplicationBuilder().token(token).build()
-    asyncio.run(
-        application.bot.set_my_commands([("start", "شروع ربات")])
-    )
+    await application.bot.set_my_commands([("start", "شروع ربات")])
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(
@@ -306,8 +304,9 @@ def main() -> None:
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_username)
     )
 
-    application.run_polling()
+    await application.run_polling()
 
 
 if __name__ == "__main__":
-    main()
+    import asyncio
+    asyncio.run(main())
