@@ -276,7 +276,6 @@ async def main() -> None:
         raise RuntimeError("متغیر محیطی TELEGRAM_BOT_TOKEN تنظیم نشده است.")
 
     application = ApplicationBuilder().token(token).build()
-    await application.bot.set_my_commands([("start", "شروع ربات")])
 
     application.add_handler(CommandHandler("start", start))
     application.add_handler(
@@ -304,7 +303,11 @@ async def main() -> None:
         MessageHandler(filters.TEXT & ~filters.COMMAND, handle_username)
     )
 
-    await application.run_polling()
+    await application.initialize()
+    await application.start()
+    await application.bot.set_my_commands([("start", "شروع ربات")])
+    await application.updater.start_polling()
+    await application.updater.wait_closed()
 
 
 if __name__ == "__main__":
