@@ -270,29 +270,17 @@ async def inline_query(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     await update.inline_query.answer(results, cache_time=60)
 
 
-async def post_init(application):
-    await application.bot.set_my_commands(
-        [
-            ("start", "Start bot"),
-            ("help", "Help"),
-            ("about", "About"),
-            ("language", "Change language"),
-        ]
-    )
-
-
 def main() -> None:
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     if not token:
         raise RuntimeError("متغیر محیطی TELEGRAM_BOT_TOKEN تنظیم نشده است.")
 
     application = ApplicationBuilder().token(token).build()
-    application.post_init = post_init
+    asyncio.run(
+        application.bot.set_my_commands([("start", "شروع ربات")])
+    )
 
     application.add_handler(CommandHandler("start", start))
-    application.add_handler(CommandHandler("help", help_command))
-    application.add_handler(CommandHandler("about", about_command))
-    application.add_handler(CommandHandler("language", language_command))
     application.add_handler(
         MessageHandler(filters.TEXT & filters.Regex(_button_regex("btn_start")), start)
     )
