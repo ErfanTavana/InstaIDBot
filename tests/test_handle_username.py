@@ -49,7 +49,13 @@ def test_handle_username_success(monkeypatch):
     update = DummyUpdate("user")
     context = DummyContext()
     asyncio.run(telegram_bot.handle_username(update, context))
-    update.message.reply_photo.assert_awaited()
+    expected_caption = messages.format_profile_info(user, messages.DEFAULT_LANG)
+    update.message.reply_photo.assert_awaited_with(
+        "http://pic",
+        caption=expected_caption,
+        parse_mode=ParseMode.MARKDOWN_V2,
+        reply_markup=telegram_bot._back_menu(messages.DEFAULT_LANG),
+    )
     assert context.user_data["profile_pic_url"] == "http://pic"
 
 
@@ -64,7 +70,7 @@ def test_handle_username_http_error(monkeypatch):
     update.message.reply_text.assert_awaited_with(
         expected,
         parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=telegram_bot._main_menu(messages.DEFAULT_LANG),
+        reply_markup=telegram_bot._back_menu(messages.DEFAULT_LANG),
     )
 
 
@@ -77,5 +83,5 @@ def test_handle_username_network_error(monkeypatch):
     update.message.reply_text.assert_awaited_with(
         expected,
         parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=telegram_bot._main_menu(messages.DEFAULT_LANG),
+        reply_markup=telegram_bot._back_menu(messages.DEFAULT_LANG),
     )

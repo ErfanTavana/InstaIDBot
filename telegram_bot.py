@@ -63,6 +63,11 @@ def _main_menu(lang: str = messages.DEFAULT_LANG) -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
 
 
+def _back_menu(lang: str = messages.DEFAULT_LANG) -> ReplyKeyboardMarkup:
+    keyboard = [[KeyboardButton(messages.get_message("btn_back", lang))]]
+    return ReplyKeyboardMarkup(keyboard, resize_keyboard=True)
+
+
 _CACHE_TTL = 300  # 5 minutes
 
 
@@ -164,17 +169,9 @@ async def about_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
     lang = _get_lang(context)
-    keyboard = [
-        [
-            KeyboardButton(messages.get_message("btn_lang_fa", lang)),
-            KeyboardButton(messages.get_message("btn_lang_en", lang)),
-        ]
-    ]
     text = escape_markdown(messages.get_message("language_prompt", lang), version=2)
     await update.message.reply_text(
-        text,
-        parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=ReplyKeyboardMarkup(keyboard, resize_keyboard=True),
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
     )
 
 
@@ -185,7 +182,7 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE, lang:
         messages.get_message(f"language_set_{lang}", lang), version=2
     )
     await update.message.reply_text(
-        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_back_menu(lang)
     )
 
 
@@ -197,6 +194,15 @@ async def set_language_en(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await set_language(update, context, "en")
 
 
+async def back_to_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
+    lang = _get_lang(context)
+    text = escape_markdown(messages.get_message("start", lang), version=2)
+    await update.message.reply_text(
+        text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+    )
+
+
 async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     await context.bot.send_chat_action(update.effective_chat.id, ChatAction.TYPING)
     lang = _get_lang(context)
@@ -205,7 +211,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     if data is None:
         text = escape_markdown(messages.get_message("error_connection", lang), version=2)
         await update.message.reply_text(
-            text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+            text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_back_menu(lang)
         )
         return
     err = data.get("error")
@@ -219,7 +225,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
         if key:
             text = escape_markdown(messages.get_message(key, lang), version=2)
             await update.message.reply_text(
-                text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+                text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_back_menu(lang)
             )
             return
     try:
@@ -227,7 +233,7 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     except (KeyError, TypeError):
         text = escape_markdown(messages.get_message("error_data", lang), version=2)
         await update.message.reply_text(
-            text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+            text, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_back_menu(lang)
         )
         return
     context.user_data["profile_pic_url"] = user.get("profile_pic_url")
@@ -242,11 +248,11 @@ async def handle_username(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
             photo_url,
             caption=caption,
             parse_mode=ParseMode.MARKDOWN_V2,
-            reply_markup=_main_menu(lang),
+            reply_markup=_back_menu(lang),
         )
     else:
         await update.message.reply_text(
-            caption, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_main_menu(lang)
+            caption, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=_back_menu(lang)
         )
 
 
@@ -306,6 +312,9 @@ def main() -> None:
     )
     application.add_handler(
         MessageHandler(filters.TEXT & filters.Regex(_button_regex("btn_lang_en")), set_language_en)
+    )
+    application.add_handler(
+        MessageHandler(filters.TEXT & filters.Regex(_button_regex("btn_back")), back_to_menu)
     )
     application.add_handler(InlineQueryHandler(inline_query))
     application.add_handler(

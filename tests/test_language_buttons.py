@@ -35,7 +35,7 @@ def test_set_language_fa():
     update.message.reply_text.assert_awaited_with(
         expected,
         parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=telegram_bot._main_menu("fa"),
+        reply_markup=telegram_bot._back_menu("fa"),
     )
     assert context.user_data["lang"] == "fa"
 
@@ -48,7 +48,7 @@ def test_set_language_en():
     update.message.reply_text.assert_awaited_with(
         expected,
         parse_mode=ParseMode.MARKDOWN_V2,
-        reply_markup=telegram_bot._main_menu("en"),
+        reply_markup=telegram_bot._back_menu("en"),
     )
     assert context.user_data["lang"] == "en"
 
