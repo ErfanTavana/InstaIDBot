@@ -39,4 +39,5 @@ def test_start_shows_main_menu():
         parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=telegram_bot._main_menu(messages.DEFAULT_LANG),
     )
+    assert context.user_data["menu"] == "main"
 

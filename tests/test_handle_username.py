@@ -57,6 +57,7 @@ def test_handle_username_success(monkeypatch):
         reply_markup=telegram_bot._back_menu(messages.DEFAULT_LANG),
     )
     assert context.user_data["profile_pic_url"] == "http://pic"
+    assert context.user_data["menu"] == "back"
 
 
 def test_handle_username_http_error(monkeypatch):
@@ -72,6 +73,7 @@ def test_handle_username_http_error(monkeypatch):
         parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=telegram_bot._back_menu(messages.DEFAULT_LANG),
     )
+    assert context.user_data["menu"] == "back"
 
 
 def test_handle_username_network_error(monkeypatch):
@@ -85,3 +87,4 @@ def test_handle_username_network_error(monkeypatch):
         parse_mode=ParseMode.MARKDOWN_V2,
         reply_markup=telegram_bot._back_menu(messages.DEFAULT_LANG),
     )
+    assert context.user_data["menu"] == "back"
